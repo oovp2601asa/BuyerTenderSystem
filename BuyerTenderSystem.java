@@ -2,28 +2,21 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
+import java.text.SimpleDateFormat;
 
-// ==================== OFFER CLASS ====================
-class Offer {
-    private String seller;
-    private String item;
-    private int price;
+// Product Model - Represents a seller's offer
+class Product {
+    private String seller, name, category, portion, complexity, delivery;
+    private int price, deliveryTime, sweetness, matchScore;
     private double rating;
-    private int time;
-    private String delivery;
-    private String category;
-    private int sweetness;
-    private String portion;
-    private String complexity;
-    private int matchScore;
 
-    public Offer(String seller, String item, int price, double rating, int time, 
-                 String delivery, String category, int sweetness, String portion, String complexity) {
+    public Product(String seller, String name, int price, double rating, int deliveryTime,
+                   String delivery, String category, int sweetness, String portion, String complexity) {
         this.seller = seller;
-        this.item = item;
+        this.name = name;
         this.price = price;
         this.rating = rating;
-        this.time = time;
+        this.deliveryTime = deliveryTime;
         this.delivery = delivery;
         this.category = category;
         this.sweetness = sweetness;
@@ -33,590 +26,493 @@ class Offer {
     }
 
     public int getTotalPrice() {
-        int deliveryFee = delivery.equals("Free") ? 0 : Integer.parseInt(delivery.replaceAll("[^0-9]", ""));
-        return price + deliveryFee;
+        if (delivery.equalsIgnoreCase("Free")) return price;
+        int fee = Integer.parseInt(delivery.replaceAll("[^0-9]", ""));
+        return price + fee;
     }
 
-    public int matchesCriteria(Map<String, Boolean> criteria) {
+    public int calculateMatchScore(Map<String, Boolean> criteria) {
         int score = 0;
-        if (criteria.get("cheapest") && price <= 15000) score += 3;
-        if (criteria.get("sweet") && sweetness >= 3) score += 2;
-        if (criteria.get("large") && portion.equals("large")) score += 2;
-        if (criteria.get("simple") && complexity.equals("simple")) score += 2;
-        if (criteria.get("fastest") && time <= 15) score += 3;
+        if (criteria.getOrDefault("cheapest", false) && price <= 15000) score += 3;
+        if (criteria.getOrDefault("sweet", false) && sweetness >= 3) score += 2;
+        if (criteria.getOrDefault("large", false) && "large".equals(portion)) score += 2;
+        if (criteria.getOrDefault("simple", false) && "simple".equals(complexity)) score += 2;
+        if (criteria.getOrDefault("fastest", false) && deliveryTime <= 15) score += 3;
         return score;
     }
 
-    // Getters
     public String getSeller() { return seller; }
-    public String getItem() { return item; }
+    public String getName() { return name; }
     public int getPrice() { return price; }
     public double getRating() { return rating; }
-    public int getTime() { return time; }
+    public int getDeliveryTime() { return deliveryTime; }
     public String getDelivery() { return delivery; }
     public String getCategory() { return category; }
-    public int getSweetness() { return sweetness; }
-    public String getPortion() { return portion; }
-    public String getComplexity() { return complexity; }
     public int getMatchScore() { return matchScore; }
     public void setMatchScore(int score) { this.matchScore = score; }
 }
 
-// ==================== TENDER CLASS ====================
-class Tender {
+// Search Request - Models customer tender request
+class SearchRequest {
     private long id;
-    private String request;
+    private String query;
     private String timestamp;
-    private List<Offer> offers;
+    private List<Product> results;
     private Map<String, Boolean> criteria;
     private String category;
 
-    public Tender(String request) {
+    public SearchRequest(String query) {
         this.id = System.currentTimeMillis();
-        this.request = request;
-        this.timestamp = new java.text.SimpleDateFormat("HH:mm").format(new Date());
-        this.offers = new ArrayList<>();
-        this.criteria = parseCriteria(request);
-        this.category = detectCategory(request.toLowerCase());
+        this.query = query;
+        this.timestamp = new SimpleDateFormat("HH:mm").format(new Date());
+        this.results = new ArrayList<>();
+        this.criteria = parseKeywords(query.toLowerCase());
+        this.category = detectCategory(query.toLowerCase());
     }
 
-    private Map<String, Boolean> parseCriteria(String text) {
-        String lower = text.toLowerCase();
-        Map<String, Boolean> crit = new HashMap<>();
-        crit.put("cheapest", lower.contains("cheap") || lower.contains("budget") || lower.contains("affordable"));
-        crit.put("sweet", lower.contains("sweet"));
-        crit.put("large", lower.contains("large") || lower.contains("big") || lower.contains("jumbo") || lower.contains("lot"));
-        crit.put("simple", lower.contains("simple") || lower.contains("easy") || lower.contains("basic"));
-        crit.put("fastest", lower.contains("fast") || lower.contains("quick") || lower.contains("rapid"));
-        return crit;
+    private Map<String, Boolean> parseKeywords(String text) {
+        Map<String, Boolean> map = new HashMap<>();
+        map.put("cheapest", text.matches(".*(cheap|budget|affordable).*"));
+        map.put("sweet", text.contains("sweet"));
+        map.put("large", text.matches(".*(large|big|jumbo|lot).*"));
+        map.put("simple", text.matches(".*(simple|easy|basic).*"));
+        map.put("fastest", text.matches(".*(fast|quick|rapid).*"));
+        return map;
     }
 
     private String detectCategory(String text) {
-        if (text.contains("padang") || text.contains("rendang")) return "padang";
-        if (text.contains("rice") || text.contains("food") || text.contains("eat") || text.contains("meal")) return "makanan";
-        if (text.contains("drink") || text.contains("beverage") || text.contains("coffee") || text.contains("tea") || text.contains("juice")) return "minuman";
-        if (text.contains("charger") || text.contains("electronic") || text.contains("gadget")) return "elektronik";
-        return "makanan";
+        if (text.matches(".*(padang|rendang).*")) return "padang";
+        if (text.matches(".*(drink|beverage|coffee|tea|juice).*")) return "beverage";
+        if (text.matches(".*(charger|electronic|gadget).*")) return "electronics";
+        return "food";
     }
 
-    public void addOffers(List<Offer> offersList) {
-        for (Offer offer : offersList) {
-            int score = offer.matchesCriteria(criteria);
-            offer.setMatchScore(score);
+    public void addProducts(List<Product> products) {
+        for (Product p : products) {
+            p.setMatchScore(p.calculateMatchScore(criteria));
         }
-        offers.addAll(offersList);
-        offers.sort((a, b) -> {
-            int scoreCompare = Integer.compare(b.getMatchScore(), a.getMatchScore());
-            return scoreCompare != 0 ? scoreCompare : Integer.compare(a.getPrice(), b.getPrice());
-        });
+        results.addAll(products);
+        results.sort((a, b) -> Integer.compare(b.getMatchScore(), a.getMatchScore()) != 0 ?
+            Integer.compare(b.getMatchScore(), a.getMatchScore()) :
+            Integer.compare(a.getPrice(), b.getPrice()));
     }
 
-    public List<Offer> getTopOffers(int count) {
-        return offers.subList(0, Math.min(count, offers.size()));
+    public List<Product> getTopResults(int limit) {
+        return results.subList(0, Math.min(limit, results.size()));
     }
 
-    // Getters
     public long getId() { return id; }
-    public String getRequest() { return request; }
-    public String getTimestamp() { return timestamp; }
-    public List<Offer> getOffers() { return offers; }
-    public Map<String, Boolean> getCriteria() { return criteria; }
+    public String getQuery() { return query; }
     public String getCategory() { return category; }
+    public List<Product> getResults() { return results; }
 }
 
-// ==================== OFFER DATABASE CLASS ====================
-class OfferDatabase {
-    private List<Offer> allOffers;
+// Data Access Object - Manages product database
+class ProductDAO {
+    private List<Product> products;
 
-    public OfferDatabase() {
-        allOffers = initializeOffers();
+    public ProductDAO() {
+        this.products = initializeProducts();
     }
 
-    private List<Offer> initializeOffers() {
-        List<Offer> offers = new ArrayList<>();
-        
-        // Padang Food
-        offers.add(new Offer("Sederhana Restaurant", "Padang Rendang Rice", 22000, 4.9, 20, "5k", "padang", 2, "large", "medium"));
-        offers.add(new Offer("Padang Raya Express", "Padang Ayam Pop Rice", 18000, 4.7, 15, "Free", "padang", 1, "normal", "simple"));
-        offers.add(new Offer("Budget Padang", "Economy Padang Rice", 15000, 4.5, 12, "Free", "padang", 1, "normal", "simple"));
-        offers.add(new Offer("Fast Padang", "Express Padang Rice", 16000, 4.6, 8, "Free", "padang", 1, "normal", "simple"));
-        offers.add(new Offer("Royal Padang", "Premium Rendang Set", 30000, 4.9, 25, "10k", "padang", 2, "large", "medium"));
-        offers.add(new Offer("Street Padang", "Street Style Padang", 13000, 4.4, 10, "Free", "padang", 1, "normal", "simple"));
-
-        // Other Foods
-        offers.add(new Offer("Sari Warung", "Special Fried Rice", 15000, 4.8, 15, "Free", "makanan", 2, "large", "simple"));
-        offers.add(new Offer("Mama Kitchen", "Complete Mixed Rice", 12000, 4.5, 25, "Free", "makanan", 1, "normal", "simple"));
-        offers.add(new Offer("Geprek Chicken House", "Jumbo Geprek Chicken", 18000, 4.9, 20, "5k", "makanan", 3, "large", "medium"));
-        offers.add(new Offer("Burger Station", "Double Beef Burger", 32000, 4.8, 15, "5k", "makanan", 2, "normal", "simple"));
-        offers.add(new Offer("Pizza Corner", "Personal Pepperoni Pizza", 35000, 4.6, 25, "10k", "makanan", 2, "normal", "medium"));
-        offers.add(new Offer("Sushi Express", "8pcs California Roll", 30000, 4.9, 20, "Free", "makanan", 1, "normal", "medium"));
-
-        // Drinks
-        offers.add(new Offer("Juice Corner", "Fresh Fruit Ice", 8000, 4.7, 5, "Free", "minuman", 5, "large", "simple"));
-        offers.add(new Offer("Our Coffee", "Palm Sugar Milk Coffee", 12000, 4.9, 8, "2k", "minuman", 4, "normal", "simple"));
-        offers.add(new Offer("Sweet Tea Shop", "Jumbo Sweet Iced Tea", 5000, 4.4, 3, "Free", "minuman", 5, "large", "simple"));
-        offers.add(new Offer("Boba Time", "Brown Sugar Boba Milk", 20000, 4.8, 12, "5k", "minuman", 5, "large", "medium"));
-
-        return offers;
+    private List<Product> initializeProducts() {
+        List<Product> list = new ArrayList<>();
+        list.add(new Product("Chef's Kitchen", "Padang Rice with Rendang", 22000, 4.9, 20, "5k", "padang", 2, "large", "medium"));
+        list.add(new Product("Express Padang", "Ayam Pop Padang Rice", 18000, 4.7, 15, "Free", "padang", 1, "normal", "simple"));
+        list.add(new Product("Budget Meals", "Economy Padang Rice", 15000, 4.5, 12, "Free", "padang", 1, "normal", "simple"));
+        list.add(new Product("Fast Kitchen", "Express Padang Rice", 16000, 4.6, 8, "Free", "padang", 1, "normal", "simple"));
+        list.add(new Product("Warung Sari", "Special Fried Rice", 15000, 4.8, 15, "Free", "food", 2, "large", "simple"));
+        list.add(new Product("Home Cook", "Complete Mixed Rice", 12000, 4.5, 25, "Free", "food", 1, "normal", "simple"));
+        list.add(new Product("Fried Chicken", "Jumbo Geprek Chicken", 18000, 4.9, 20, "5k", "food", 3, "large", "medium"));
+        list.add(new Product("Burger Stop", "Double Beef Burger", 32000, 4.8, 15, "5k", "food", 2, "normal", "simple"));
+        list.add(new Product("Pizza House", "Personal Pizza", 35000, 4.6, 25, "10k", "food", 2, "normal", "medium"));
+        list.add(new Product("Fresh Juice", "Fresh Fruit Ice", 8000, 4.7, 5, "Free", "beverage", 5, "large", "simple"));
+        list.add(new Product("Coffee Shop", "Palm Sugar Coffee", 12000, 4.9, 8, "2k", "beverage", 4, "normal", "simple"));
+        list.add(new Product("Tea House", "Jumbo Sweet Iced Tea", 5000, 4.4, 3, "Free", "beverage", 5, "large", "simple"));
+        list.add(new Product("Boba Store", "Brown Sugar Boba Milk", 20000, 4.8, 12, "5k", "beverage", 5, "large", "medium"));
+        return list;
     }
 
-    public List<Offer> getOffersByCategory(String category) {
-        List<Offer> filtered = new ArrayList<>();
-        for (Offer offer : allOffers) {
-            if (offer.getCategory().equals(category)) {
-                filtered.add(offer);
-            }
+    public List<Product> getByCategory(String category) {
+        List<Product> filtered = new ArrayList<>();
+        for (Product p : products) {
+            if (p.getCategory().equals(category)) filtered.add(p);
         }
         return filtered;
     }
 }
 
-// ==================== CART ITEM CLASS ====================
-class CartItem {
-    private Offer offer;
+// Cart Item - Represents single cart entry
+class CartEntry {
+    private Product product;
     private int quantity;
 
-    public CartItem(Offer offer, int quantity) {
-        this.offer = offer;
+    public CartEntry(Product product, int quantity) {
+        this.product = product;
         this.quantity = quantity;
     }
 
-    public Offer getOffer() { return offer; }
+    public Product getProduct() { return product; }
     public int getQuantity() { return quantity; }
-    public void setQuantity(int quantity) { this.quantity = quantity; }
-    public int getTotalPrice() { return offer.getPrice() * quantity; }
+    public void setQuantity(int qty) { this.quantity = qty; }
+    public int getTotal() { return product.getPrice() * quantity; }
 }
 
-// ==================== SHOPPING CART CLASS ====================
-class ShoppingCart {
-    private List<CartItem> items;
+// Shopping Cart - Manages cart operations
+class Cart {
+    private List<CartEntry> items;
 
-    public ShoppingCart() {
-        items = new ArrayList<>();
-    }
+    public Cart() { this.items = new ArrayList<>(); }
 
-    public void addItem(Offer offer, int quantity) {
-        for (CartItem item : items) {
-            if (item.getOffer().getItem().equals(offer.getItem())) {
-                item.setQuantity(item.getQuantity() + quantity);
+    public void add(Product product, int qty) {
+        for (CartEntry item : items) {
+            if (item.getProduct().getName().equals(product.getName())) {
+                item.setQuantity(item.getQuantity() + qty);
                 return;
             }
         }
-        items.add(new CartItem(offer, quantity));
+        items.add(new CartEntry(product, qty));
     }
 
-    public void removeItem(int index) {
-        if (index >= 0 && index < items.size()) {
-            items.remove(index);
-        }
+    public void remove(int index) {
+        if (index >= 0 && index < items.size()) items.remove(index);
     }
 
-    public List<CartItem> getItems() { return items; }
-    
-    public int getTotalPrice() {
-        int total = 0;
-        for (CartItem item : items) {
-            total += item.getTotalPrice();
-        }
-        return total;
+    public List<CartEntry> getItems() { return items; }
+    public int getTotal() {
+        return items.stream().mapToInt(CartEntry::getTotal).sum();
     }
 
     public void clear() { items.clear(); }
-    public int getItemCount() { return items.size(); }
+    public int count() { return items.size(); }
 }
 
-// ==================== MAIN GUI CLASS ====================
+// Main GUI - Product Tender System
 public class BuyerTenderSystem extends JFrame {
-    private OfferDatabase database;
-    private ShoppingCart cart;
-    private Tender activeTender;
-    private List<Tender> tenderHistory;
-    
-    private JTextArea requestArea;
-    private JPanel offersPanel;
-    private JLabel cartCountLabel;
+    private ProductDAO db;
+    private Cart cart;
+    private SearchRequest currentSearch;
+    private JTextArea searchInput;
+    private JPanel productsDisplay;
+    private JLabel cartLabel;
 
     public BuyerTenderSystem() {
-        database = new OfferDatabase();
-        cart = new ShoppingCart();
-        tenderHistory = new ArrayList<>();
-        
-        setTitle("BUYERS ARE KINGS - Tender System");
+        db = new ProductDAO();
+        cart = new Cart();
+        initializeFrame();
+    }
+
+    private void initializeFrame() {
+        setTitle("Product Tender System - Buy Smart");
         setSize(1100, 750);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
-
-        createGUI();
+        buildUI();
         setLocationRelativeTo(null);
         setVisible(true);
     }
 
-    private void createGUI() {
-        // Header Panel
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(new Color(37, 99, 235));
-        headerPanel.setPreferredSize(new Dimension(0, 100));
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 20));
-        
-        JLabel titleLabel = new JLabel("BUYERS ARE KINGS - Tender System");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 28));
-        titleLabel.setForeground(Color.WHITE);
-        
-        JButton cartBtn = new JButton("🛒 View Cart");
-        cartBtn.setFont(new Font("Arial", Font.BOLD, 14));
-        cartBtn.setBackground(new Color(34, 197, 94));
-        cartBtn.setForeground(Color.WHITE);
-        cartBtn.setFocusPainted(false);
-        cartBtn.addActionListener(e -> showCart());
-        
-        cartCountLabel = new JLabel("(0 items)");
-        cartCountLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        cartCountLabel.setForeground(Color.WHITE);
-        
-        JPanel cartPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        cartPanel.setBackground(new Color(37, 99, 235));
-        cartPanel.add(cartBtn);
-        cartPanel.add(cartCountLabel);
-        
-        headerPanel.add(titleLabel, BorderLayout.WEST);
-        headerPanel.add(cartPanel, BorderLayout.EAST);
-        add(headerPanel, BorderLayout.NORTH);
-
-        // Left Panel - Search & Filter
-        JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
-        leftPanel.setPreferredSize(new Dimension(320, 0));
-        leftPanel.setBackground(new Color(245, 247, 250));
-        leftPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-
-        // Title
-        JLabel reqLabel = new JLabel("🔍 Cari Penawaran");
-        reqLabel.setFont(new Font("Arial", Font.BOLD, 20));
-        reqLabel.setForeground(new Color(37, 99, 235));
-
-        // Description
-        JLabel descLabel = new JLabel("<html>Jelaskan apa yang Anda cari dengan detail untuk mendapatkan penawaran terbaik!</html>");
-        descLabel.setFont(new Font("Arial", Font.PLAIN, 12));
-        descLabel.setForeground(new Color(100, 116, 139));
-
-        // Text area
-        requestArea = new JTextArea(5, 20);
-        requestArea.setLineWrap(true);
-        requestArea.setWrapStyleWord(true);
-        requestArea.setFont(new Font("Arial", Font.PLAIN, 14));
-        requestArea.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(37, 99, 235), 2),
-            BorderFactory.createEmptyBorder(10, 10, 10, 10)));
-        requestArea.setBackground(Color.WHITE);
-        JScrollPane reqScroll = new JScrollPane(requestArea);
-
-        // Start Button
-        JButton startBtn = new JButton("🚀 Cari Penawaran");
-        startBtn.setFont(new Font("Arial", Font.BOLD, 15));
-        startBtn.setBackground(new Color(37, 99, 235));
-        startBtn.setForeground(Color.WHITE);
-        startBtn.setFocusPainted(false);
-        startBtn.setPreferredSize(new Dimension(0, 50));
-        startBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        startBtn.addActionListener(e -> startTender());
-
-        // Tips Panel
-        JPanel tipsPanel = new JPanel();
-        tipsPanel.setLayout(new BoxLayout(tipsPanel, BoxLayout.Y_AXIS));
-        tipsPanel.setBackground(new Color(245, 247, 250));
-        tipsPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(191, 219, 254), 1),
-            BorderFactory.createEmptyBorder(10, 10, 10, 10)));
-
-        JLabel tipsTitle = new JLabel("💡 Tips");
-        tipsTitle.setFont(new Font("Arial", Font.BOLD, 12));
-        tipsTitle.setForeground(new Color(37, 99, 235));
-
-        String[] tips = {
-            "✓ Gunakan kata 'murah' untuk harga terjangkau",
-            "✓ Gunakan 'cepat' untuk pengiriman kilat",
-            "✓ Sebutkan kategori: makanan, minuman, dll"
-        };
-        
-        tipsPanel.add(tipsTitle);
-        tipsPanel.add(Box.createRigidArea(new Dimension(0, 5)));
-        for (String tip : tips) {
-            JLabel tipLabel = new JLabel(tip);
-            tipLabel.setFont(new Font("Arial", Font.PLAIN, 11));
-            tipLabel.setForeground(new Color(71, 85, 105));
-            tipsPanel.add(tipLabel);
-        }
-
-        JPanel topLeft = new JPanel(new BorderLayout(5, 5));
-        topLeft.setBackground(new Color(245, 247, 250));
-        topLeft.add(reqLabel, BorderLayout.NORTH);
-        topLeft.add(descLabel, BorderLayout.NORTH);
-        
-        JPanel centerLeft = new JPanel(new BorderLayout(5, 5));
-        centerLeft.setBackground(new Color(245, 247, 250));
-        centerLeft.add(reqScroll, BorderLayout.CENTER);
-        centerLeft.add(startBtn, BorderLayout.SOUTH);
-        
-        leftPanel.add(reqLabel, BorderLayout.NORTH);
-        leftPanel.add(centerLeft, BorderLayout.CENTER);
-        leftPanel.add(tipsPanel, BorderLayout.SOUTH);
-        add(leftPanel, BorderLayout.WEST);
-
-        // Center Panel - Offers Display
-        offersPanel = new JPanel();
-        offersPanel.setLayout(new GridLayout(0, 2, 15, 15));
-        offersPanel.setBackground(new Color(239, 246, 255));
-        offersPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        JScrollPane offersScroll = new JScrollPane(offersPanel);
-        add(offersScroll, BorderLayout.CENTER);
-
+    private void buildUI() {
+        add(createHeader(), BorderLayout.NORTH);
+        add(createLeftPanel(), BorderLayout.WEST);
+        JScrollPane center = new JScrollPane(createCenterPanel());
+        add(center, BorderLayout.CENTER);
         showEmptyState();
     }
 
-    private void showEmptyState() {
-        offersPanel.removeAll();
-        offersPanel.setLayout(new GridBagLayout());
+    private JPanel createHeader() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(37, 99, 235));
+        panel.setPreferredSize(new Dimension(0, 80));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 20));
+
+        JLabel title = new JLabel("Product Tender System");
+        title.setFont(new Font("Arial", Font.BOLD, 26));
+        title.setForeground(Color.WHITE);
+
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        right.setBackground(new Color(37, 99, 235));
         
-        JLabel emptyLabel = new JLabel("<html><center>🛒 Belum Ada Penawaran<br><br>Silakan ketik pencarian Anda di sebelah kiri untuk melihat penawaran terbaik!</center></html>");
-        emptyLabel.setFont(new Font("Arial", Font.BOLD, 18));
-        emptyLabel.setForeground(new Color(147, 197, 253));
-        
-        offersPanel.add(emptyLabel);
-        offersPanel.revalidate();
-        offersPanel.repaint();
+        JButton cartBtn = createButton("🛒 View Cart", new Color(34, 197, 94), e -> showCart());
+        cartLabel = new JLabel("(0 items)");
+        cartLabel.setFont(new Font("Arial", Font.BOLD, 12));
+        cartLabel.setForeground(Color.WHITE);
+
+        right.add(cartBtn);
+        right.add(cartLabel);
+
+        panel.add(title, BorderLayout.WEST);
+        panel.add(right, BorderLayout.EAST);
+        return panel;
     }
 
-    private void startTender() {
-        String request = requestArea.getText().trim();
-        if (request.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Silakan masukkan pencarian Anda!", "Peringatan", JOptionPane.WARNING_MESSAGE);
+    private JPanel createLeftPanel() {
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.setPreferredSize(new Dimension(300, 0));
+        panel.setBackground(new Color(245, 247, 250));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        JLabel title = new JLabel("🔍 Search Products");
+        title.setFont(new Font("Arial", Font.BOLD, 18));
+        title.setForeground(new Color(37, 99, 235));
+
+        searchInput = new JTextArea(5, 20);
+        searchInput.setLineWrap(true);
+        searchInput.setWrapStyleWord(true);
+        searchInput.setFont(new Font("Arial", Font.PLAIN, 13));
+        searchInput.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(37, 99, 235), 2),
+            BorderFactory.createEmptyBorder(8, 8, 8, 8)));
+
+        JButton searchBtn = createButton("🚀 Search", new Color(37, 99, 235), e -> performSearch());
+        searchBtn.setPreferredSize(new Dimension(0, 45));
+
+        JPanel center = new JPanel(new BorderLayout(5, 5));
+        center.setBackground(new Color(245, 247, 250));
+        center.add(new JScrollPane(searchInput), BorderLayout.CENTER);
+        center.add(searchBtn, BorderLayout.SOUTH);
+
+        JPanel tips = createTipsPanel();
+
+        panel.add(title, BorderLayout.NORTH);
+        panel.add(center, BorderLayout.CENTER);
+        panel.add(tips, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private JPanel createTipsPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(new Color(245, 247, 250));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(191, 219, 254), 1),
+            BorderFactory.createEmptyBorder(10, 10, 10, 10)));
+
+        JLabel title = new JLabel("💡 Tips");
+        title.setFont(new Font("Arial", Font.BOLD, 11));
+        title.setForeground(new Color(37, 99, 235));
+
+        String[] tips = {"Use 'cheap' for budget", "Use 'fast' for quick delivery", "Mention category: food, beverage"};
+        panel.add(title);
+        panel.add(Box.createRigidArea(new Dimension(0, 5)));
+        for (String tip : tips) {
+            JLabel label = new JLabel("• " + tip);
+            label.setFont(new Font("Arial", Font.PLAIN, 10));
+            label.setForeground(new Color(71, 85, 105));
+            panel.add(label);
+        }
+        return panel;
+    }
+
+    private JPanel createCenterPanel() {
+        productsDisplay = new JPanel();
+        productsDisplay.setLayout(new GridLayout(0, 2, 15, 15));
+        productsDisplay.setBackground(new Color(239, 246, 255));
+        productsDisplay.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        return productsDisplay;
+    }
+
+    private void performSearch() {
+        String query = searchInput.getText().trim();
+        if (query.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter a search query!", "Warning", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        Tender tender = new Tender(request);
-        List<Offer> categoryOffers = database.getOffersByCategory(tender.getCategory());
-        tender.addOffers(categoryOffers);
-
-        activeTender = tender;
-        tenderHistory.add(0, tender);
-        displayOffers();
-        requestArea.setText("");
+        currentSearch = new SearchRequest(query);
+        List<Product> categoryProducts = db.getByCategory(currentSearch.getCategory());
+        currentSearch.addProducts(categoryProducts);
+        displayProducts();
+        searchInput.setText("");
     }
 
-    private void displayOffers() {
-        offersPanel.removeAll();
-        offersPanel.setLayout(new GridLayout(0, 2, 15, 15));
-        
-        for (Offer offer : activeTender.getTopOffers(6)) {
-            offersPanel.add(createOfferCard(offer));
+    private void displayProducts() {
+        productsDisplay.removeAll();
+        productsDisplay.setLayout(new GridLayout(0, 2, 15, 15));
+
+        if (currentSearch == null || currentSearch.getResults().isEmpty()) {
+            showEmptyState();
+            return;
         }
-        
-        offersPanel.revalidate();
-        offersPanel.repaint();
+
+        for (Product p : currentSearch.getTopResults(6)) {
+            productsDisplay.add(createProductCard(p));
+        }
+
+        productsDisplay.revalidate();
+        productsDisplay.repaint();
     }
 
-    private JPanel createOfferCard(Offer offer) {
+    private JPanel createProductCard(Product product) {
         JPanel card = new JPanel(new BorderLayout());
         card.setBackground(Color.WHITE);
         card.setBorder(BorderFactory.createLineBorder(new Color(191, 219, 254), 2));
 
-        // Header
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(new Color(37, 99, 235));
         header.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        JLabel sellerLbl = new JLabel(offer.getSeller());
-        sellerLbl.setFont(new Font("Arial", Font.BOLD, 14));
-        sellerLbl.setForeground(Color.WHITE);
-        
-        JLabel ratingLbl = new JLabel(String.format("⭐ %.1f", offer.getRating()));
-        ratingLbl.setForeground(Color.WHITE);
-        
-        header.add(sellerLbl, BorderLayout.WEST);
-        header.add(ratingLbl, BorderLayout.EAST);
 
-        // Body
+        JLabel seller = new JLabel(product.getSeller());
+        seller.setFont(new Font("Arial", Font.BOLD, 13));
+        seller.setForeground(Color.WHITE);
+
+        JLabel rating = new JLabel(String.format("⭐ %.1f", product.getRating()));
+        rating.setForeground(Color.WHITE);
+
+        header.add(seller, BorderLayout.WEST);
+        header.add(rating, BorderLayout.EAST);
+
         JPanel body = new JPanel();
         body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
         body.setBackground(Color.WHITE);
         body.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        JLabel itemLbl = new JLabel(offer.getItem());
-        itemLbl.setFont(new Font("Arial", Font.BOLD, 14));
+        JLabel name = new JLabel(product.getName());
+        name.setFont(new Font("Arial", Font.BOLD, 13));
 
-        JLabel priceLbl = new JLabel(String.format("💰 Rp %,d", offer.getPrice()));
-        priceLbl.setFont(new Font("Arial", Font.BOLD, 16));
-        priceLbl.setForeground(new Color(34, 197, 94));
+        JLabel price = new JLabel(String.format("💰 IDR %,d", product.getPrice()));
+        price.setFont(new Font("Arial", Font.BOLD, 15));
+        price.setForeground(new Color(34, 197, 94));
 
-        JLabel infoLbl = new JLabel(String.format("⏱️ %d min | 🚚 %s", offer.getTime(), offer.getDelivery()));
-        infoLbl.setFont(new Font("Arial", Font.PLAIN, 11));
+        JLabel info = new JLabel(String.format("⏱️ %d min | 🚚 %s", product.getDeliveryTime(), product.getDelivery()));
+        info.setFont(new Font("Arial", Font.PLAIN, 10));
 
-        body.add(itemLbl);
+        body.add(name);
         body.add(Box.createRigidArea(new Dimension(0, 8)));
-        body.add(priceLbl);
+        body.add(price);
         body.add(Box.createRigidArea(new Dimension(0, 5)));
-        body.add(infoLbl);
+        body.add(info);
 
-        // Buttons
-        JPanel btns = new JPanel(new GridLayout(1, 2, 8, 0));
-        btns.setBackground(Color.WHITE);
-        btns.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 8, 0));
+        buttons.setBackground(Color.WHITE);
+        buttons.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
 
-        JButton cartBtn = new JButton("🛒 Cart");
-        cartBtn.setBackground(new Color(234, 179, 8));
-        cartBtn.setForeground(Color.WHITE);
-        cartBtn.setFocusPainted(false);
-        cartBtn.addActionListener(e -> addToCart(offer));
+        buttons.add(createButton("🛒 Add", new Color(234, 179, 8), e -> addToCart(product)));
+        buttons.add(createButton("✅ Buy", new Color(34, 197, 94), e -> buyNow(product)));
 
-        JButton buyBtn = new JButton("✅ Buy");
-        buyBtn.setBackground(new Color(34, 197, 94));
-        buyBtn.setForeground(Color.WHITE);
-        buyBtn.setFocusPainted(false);
-        buyBtn.addActionListener(e -> buyNow(offer));
-
-        btns.add(cartBtn);
-        btns.add(buyBtn);
-        body.add(btns);
-
+        body.add(buttons);
         card.add(header, BorderLayout.NORTH);
         card.add(body, BorderLayout.CENTER);
         return card;
     }
 
-    private void addToCart(Offer offer) {
-        cart.addItem(offer, 1);
-        updateCartCount();
-        JOptionPane.showMessageDialog(this, 
-            offer.getItem() + " berhasil ditambahkan ke keranjang!", 
-            "✅ Berhasil", 
-            JOptionPane.INFORMATION_MESSAGE);
+    private JButton createButton(String text, Color bg, java.awt.event.ActionListener action) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Arial", Font.BOLD, 11));
+        btn.setBackground(bg);
+        btn.setForeground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btn.addActionListener(action);
+        return btn;
     }
 
-    private void buyNow(Offer offer) {
+    private void addToCart(Product product) {
+        cart.add(product, 1);
+        updateCartCount();
+        JOptionPane.showMessageDialog(this, product.getName() + " added to cart!", "Success", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void buyNow(Product product) {
         int confirm = JOptionPane.showConfirmDialog(this,
-            String.format("Beli %s seharga Rp %,d?", offer.getItem(), offer.getPrice()),
-            "Konfirmasi Pembelian", JOptionPane.YES_NO_OPTION);
-        
+            "Buy " + product.getName() + " for IDR " + product.getPrice() + "?",
+            "Confirm Purchase", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             JOptionPane.showMessageDialog(this,
-                String.format("✅ Pembelian Berhasil!\n\nProduk: %s\nPenjual: %s\nHarga: Rp %,d\nPengiriman: %d menit",
-                    offer.getItem(), offer.getSeller(), offer.getPrice(), offer.getTime()),
-                "✅ Sukses", JOptionPane.INFORMATION_MESSAGE);
+                "Purchase successful!\nProduct: " + product.getName() +
+                "\nVendor: " + product.getSeller() + "\nDelivery: " + product.getDeliveryTime() + " min",
+                "Success", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
     private void showCart() {
-        JDialog cartDialog = new JDialog(this, "🛒 Keranjang Belanja", true);
-        cartDialog.setSize(550, 450);
-        cartDialog.setLayout(new BorderLayout(10, 10));
-        cartDialog.setBackground(new Color(245, 247, 250));
+        JDialog dialog = new JDialog(this, "Shopping Cart", true);
+        dialog.setSize(500, 400);
+        dialog.setLayout(new BorderLayout(10, 10));
 
-        JPanel itemsPanel = new JPanel();
-        itemsPanel.setLayout(new BoxLayout(itemsPanel, BoxLayout.Y_AXIS));
-        itemsPanel.setBackground(new Color(245, 247, 250));
-        itemsPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        JPanel items = new JPanel();
+        items.setLayout(new BoxLayout(items, BoxLayout.Y_AXIS));
+        items.setBackground(new Color(245, 247, 250));
+        items.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
         if (cart.getItems().isEmpty()) {
-            JLabel emptyLabel = new JLabel("Keranjang Anda kosong");
-            emptyLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-            emptyLabel.setForeground(new Color(100, 116, 139));
-            itemsPanel.add(emptyLabel);
+            JLabel empty = new JLabel("Your cart is empty");
+            empty.setFont(new Font("Arial", Font.PLAIN, 13));
+            items.add(empty);
         } else {
             for (int i = 0; i < cart.getItems().size(); i++) {
-                CartItem item = cart.getItems().get(i);
-                JPanel itemPanel = new JPanel(new BorderLayout(10, 0));
-                itemPanel.setBackground(Color.WHITE);
-                itemPanel.setBorder(BorderFactory.createCompoundBorder(
+                CartEntry entry = cart.getItems().get(i);
+                JPanel item = new JPanel(new BorderLayout(10, 0));
+                item.setBackground(Color.WHITE);
+                item.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(new Color(191, 219, 254), 1),
                     BorderFactory.createEmptyBorder(10, 10, 10, 10)));
-                itemPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
-                
-                JLabel infoLabel = new JLabel(String.format(
-                    "<html><b>%s</b><br>Qty: %d | Rp %,d</html>",
-                    item.getOffer().getItem(), 
-                    item.getQuantity(), 
-                    item.getTotalPrice()));
-                infoLabel.setFont(new Font("Arial", Font.PLAIN, 12));
-                
-                final int index = i;
-                JButton removeBtn = new JButton("❌ Hapus");
-                removeBtn.setPreferredSize(new Dimension(90, 30));
-                removeBtn.setBackground(new Color(239, 68, 68));
-                removeBtn.setForeground(Color.WHITE);
-                removeBtn.setFocusPainted(false);
-                removeBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-                removeBtn.addActionListener(e -> {
-                    cart.removeItem(index);
+                item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
+
+                JLabel info = new JLabel(String.format("<html><b>%s</b><br>Qty: %d | IDR %,d</html>",
+                    entry.getProduct().getName(), entry.getQuantity(), entry.getTotal()));
+                info.setFont(new Font("Arial", Font.PLAIN, 11));
+
+                final int idx = i;
+                JButton remove = createButton("❌ Remove", new Color(239, 68, 68), e -> {
+                    cart.remove(idx);
                     updateCartCount();
-                    cartDialog.dispose();
+                    dialog.dispose();
                     showCart();
                 });
-                
-                itemPanel.add(infoLabel, BorderLayout.CENTER);
-                itemPanel.add(removeBtn, BorderLayout.EAST);
-                itemsPanel.add(itemPanel);
-                itemsPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+                remove.setPreferredSize(new Dimension(80, 30));
+
+                item.add(info, BorderLayout.CENTER);
+                item.add(remove, BorderLayout.EAST);
+                items.add(item);
+                items.add(Box.createRigidArea(new Dimension(0, 8)));
             }
         }
 
-        JScrollPane scroll = new JScrollPane(itemsPanel);
+        JScrollPane scroll = new JScrollPane(items);
         scroll.setBorder(BorderFactory.createEmptyBorder());
-        
-        JPanel bottomPanel = new JPanel(new BorderLayout(10, 10));
-        bottomPanel.setBackground(Color.WHITE);
-        bottomPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(191, 219, 254), 1),
-            BorderFactory.createEmptyBorder(15, 15, 15, 15)));
-        
-        JLabel totalLbl = new JLabel(String.format("Total: Rp %,d", cart.getTotalPrice()));
-        totalLbl.setFont(new Font("Arial", Font.BOLD, 20));
-        totalLbl.setForeground(new Color(37, 99, 235));
-        
-        JPanel btnPanel = new JPanel(new GridLayout(1, 2, 10, 0));
-        btnPanel.setBackground(Color.WHITE);
-        
-        JButton closeBtn = new JButton("❌ Tutup");
-        closeBtn.setBackground(new Color(107, 114, 128));
-        closeBtn.setForeground(Color.WHITE);
-        closeBtn.setFocusPainted(false);
-        closeBtn.setPreferredSize(new Dimension(0, 40));
-        closeBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        closeBtn.addActionListener(e -> cartDialog.dispose());
-        
-        JButton checkoutBtn = new JButton("✅ Checkout");
-        checkoutBtn.setBackground(new Color(34, 197, 94));
-        checkoutBtn.setForeground(Color.WHITE);
-        checkoutBtn.setFocusPainted(false);
-        checkoutBtn.setPreferredSize(new Dimension(0, 40));
-        checkoutBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        checkoutBtn.addActionListener(e -> {
-            if (cart.getItems().isEmpty()) {
-                JOptionPane.showMessageDialog(cartDialog, "Keranjang Anda kosong!", "⚠️ Peringatan", JOptionPane.WARNING_MESSAGE);
-            } else {
-                JOptionPane.showMessageDialog(cartDialog,
-                    String.format("✅ Checkout Berhasil!\n\nTotal Pembayaran: Rp %,d\nJumlah Item: %d",
-                        cart.getTotalPrice(), cart.getItemCount()),
-                    "✅ Sukses", JOptionPane.INFORMATION_MESSAGE);
-                cart.clear();
-                updateCartCount();
-                cartDialog.dispose();
-            }
-        });
-        
-        btnPanel.add(closeBtn);
-        btnPanel.add(checkoutBtn);
-        
-        bottomPanel.add(totalLbl, BorderLayout.NORTH);
-        bottomPanel.add(btnPanel, BorderLayout.SOUTH);
 
-        cartDialog.add(scroll, BorderLayout.CENTER);
-        cartDialog.add(bottomPanel, BorderLayout.SOUTH);
+        JPanel bottom = new JPanel(new BorderLayout(10, 10));
+        bottom.setBackground(Color.WHITE);
+        bottom.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        JLabel total = new JLabel("Total: IDR " + String.format("%,d", cart.getTotal()));
+        total.setFont(new Font("Arial", Font.BOLD, 18));
+        total.setForeground(new Color(37, 99, 235));
+
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 10, 0));
+        buttons.add(createButton("Close", new Color(107, 114, 128), e -> dialog.dispose()));
+        buttons.add(createButton("Checkout", new Color(34, 197, 94), e -> {
+            JOptionPane.showMessageDialog(dialog, "Checkout successful!");
+            cart.clear();
+            updateCartCount();
+            dialog.dispose();
+        }));
+
+        bottom.add(total, BorderLayout.NORTH);
+        bottom.add(buttons, BorderLayout.SOUTH);
+
+        dialog.add(scroll, BorderLayout.CENTER);
+        dialog.add(bottom, BorderLayout.SOUTH);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
+    private void showEmptyState() {
+        productsDisplay.removeAll();
+        productsDisplay.setLayout(new GridBagLayout());
         
-        cartDialog.setLocationRelativeTo(this);
-        cartDialog.setVisible(true);
+        JLabel label = new JLabel("<html><center>🛍️ No Products Yet<br><br>Search for products to get started!</center></html>");
+        label.setFont(new Font("Arial", Font.BOLD, 16));
+        label.setForeground(new Color(147, 197, 253));
+        
+        productsDisplay.add(label);
+        productsDisplay.revalidate();
+        productsDisplay.repaint();
     }
 
     private void updateCartCount() {
-        cartCountLabel.setText(String.format("(%d items)", cart.getItemCount()));
+        cartLabel.setText("(" + cart.count() + " items)");
     }
 
     public static void main(String[] args) {
